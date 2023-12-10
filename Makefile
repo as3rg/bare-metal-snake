@@ -1,6 +1,9 @@
-all:
-	nasm boot_sect.asm -f bin -o boot_sect.bin
-	qemu-system-x86_64 boot_sect.bin
+all: flp
+	qemu-system-x86_64 -hda boot.flp
+
+flp:
+	nasm boot.asm -f bin -o boot.bin
+	dd status=noxfer conv=notrunc if=boot.bin of=boot.flp
 
 clean:
-	rm boot_sect.bin
+	rm -f *.bin *.img *.flp *.iso
