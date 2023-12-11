@@ -10,7 +10,7 @@ org 0x7C00
     mov cl, 2           ; sector
     xor bx, bx
     mov es, bx
-    mov bx, startbuf       ; buffer address
+    mov bx, startbuf    ; buffer address
     int 0x13
 
     jmp start
@@ -30,26 +30,34 @@ tail        equ 0x00000504
 bodyx       equ 0x00000510
 bodyy       equ 0x00000BC2
 
+foodctr     equ 0x00000506
+foodper     equ 45
+
 arenaw      equ 45
 arenah      equ 45
-arenasize   equ 2025
+maxlen      equ 2025
 pixel_size  equ 4
 border      equ 4
+startlen    equ 3
+
+food_color  equ 0x9
+bord_color  equ 0xF
+snake_color equ 0x4
+
+
 
 start:
     ; set mode 
     mov ax, 0x0013
     int 0x10
 
-    mov word [head], 0
-    mov word [tail], 0
-    mov byte [bodyx + 1], 0x0
-    mov byte [bodyy + 1], 0x0
-    mov byte [bodyx], 0x0
-    mov byte [bodyy], 0x0
+    ; todo fill zeros
+    mov word [head], startlen
+    mov word [tail], 1
     mov byte [dir_addr], -1
     mov cx, 0
     mov dx, 0
+    mov byte [foodctr], 1
    
     call draw_border
     jmp repeat
@@ -71,6 +79,22 @@ draw_pixel:
     inc dx
     int 0x10
     dec cx
+    int 0x10
+
+    pop dx
+    pop cx
+    ret
+
+get_pixel:
+    push cx
+    push dx
+
+    mov ch, 0
+    mov dh, 0
+
+    mov ah, 0x0D
+    lea cx, [border + pixel_size * ecx]
+    lea dx, [border + pixel_size * edx]
     int 0x10
 
     pop dx
@@ -127,7 +151,7 @@ draw_border:
     push dx
 
     mov ah, 0x0C
-    mov al, 0xF
+    mov al, bord_color
     mov cx, 2
     mov dx, 2
     lea bp, [arenah * pixel_size + border]
@@ -180,29 +204,39 @@ move:
 
     mov bp, word [head]
     inc bp
-    cmp bp, arenasize
+    cmp bp, maxlen
     jl .skip
-    sub bp, arenasize
+    sub bp, maxlen
 .skip:
     mov word [head], bp
     mov byte [bp + bodyx], cl
     mov byte [bp + bodyy], dl
-    mov al, 0x04
+    call get_pixel
+    cmp al, snake_color
+    je start
+    cmp al, food_color
+    je .plus_len
+    mov al, snake_color
     call draw_pixel
 
     mov bp, word [tail]
     mov cl, byte [bp + bodyx]
     mov dl, byte [bp + bodyy]
-    mov al, 0x01
+    mov al, 0x00
     call draw_pixel
 
     inc bp
-    cmp bp, arenasize
+    cmp bp, maxlen
     jl .skip2
-    sub bp, arenasize
+    sub bp, maxlen
 .skip2:
     mov word [tail], bp
+    jmp .ret
 
+.plus_len:
+    mov al, snake_color
+    call draw_pixel
+.ret:
     pop dx
     pop cx
     ret
@@ -253,6 +287,8 @@ repeat:
     call move
 
     call wait_
+
+    call food
     jmp repeat
 
 wait_:
@@ -266,4 +302,28 @@ wait_:
     pop cx
     ret
 
+food:
+    dec byte [foodctr]
+    jnz .ret
+    mov byte [foodctr], foodper
+    push cx
+    push dx
+    rdtsc
+    mov ebp, arenaw
+    div ebp
+    mov cl, dl
 
+    rdtsc
+    mov ebp, arenah
+    div ebp
+
+    call get_pixel
+    cmp al, snake_color
+    je .ret
+    mov al, food_color
+    call draw_pixel
+
+    pop dx
+    pop cx
+.ret:
+    ret
