@@ -303,17 +303,17 @@ wait_:
     ret
 
 food:
+    push cx
+    push dx
+
     dec byte [foodctr]
     jnz .ret
     mov byte [foodctr], foodper
-    push cx
-    push dx
-    rdtsc
+
     mov ebp, arenaw
     div ebp
     mov cl, dl
 
-    rdtsc
     mov ebp, arenah
     div ebp
 
@@ -323,7 +323,7 @@ food:
     mov al, food_color
     call draw_pixel
 
+.ret:
     pop dx
     pop cx
-.ret:
     ret
