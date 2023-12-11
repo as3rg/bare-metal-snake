@@ -14,4 +14,4 @@ flush: flp
 	fi
 
 clean:
-	rm -f *.bin *.img *.flp *.iso
+	rm -f *.bin *.img *.flp *.iso *.elf
