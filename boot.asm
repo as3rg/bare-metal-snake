@@ -2,67 +2,70 @@ use16
 org 0x7C00
 
     ; load program
-    mov ah, 0x02        ; load sector
-    mov al, 1           ; sectors count
-    mov dl, 0x80        ; drive (0x80 = first hard drive)
-    mov ch, 0           ; cylinder
-    mov dh, 0           ; head 
-    mov cl, 2           ; sector
+    mov ah, 0x02
+    mov al, 1
+    mov dl, 0x80
+    mov ch, 0
+    mov dh, 0 
+    mov cl, 2
     xor bx, bx
     mov es, bx
-    mov bx, startbuf    ; buffer address
+    mov bx, stage2_addr
     int 0x13
 
-    jmp start
+    jmp stage2_addr
 
     ; Magic bytes.    
     times ((0x200 - 2) - ($ - $$)) db 0x00
     dw 0xAA55
 
-startbuf    equ 0x00007E00
-dir_addr    equ 0x00000500
-dir_up      equ 0
-dir_right   equ 1
-dir_down    equ 2
-dir_left    equ 3
-head        equ 0x00000502
-tail        equ 0x00000504
-bodyx       equ 0x00000510
-bodyy       equ 0x00000BC2
+stage2_addr     equ 0x00007E00
+clock_addr      equ 0x0000046C
+stack_addr      equ 0x00007C00
+dir_addr        equ 0x00000500
+dir_up          equ 0
+dir_right       equ 1
+dir_down        equ 2
+dir_left        equ 3
+head_addr       equ 0x00000502
+tail_addr       equ 0x00000504
+bodyx_addr      equ 0x00000510
+bodyy_addr      equ 0x00000BC2
 
-foodctr     equ 0x00000506
-foodper     equ 45
+food_cntr_addr  equ 0x00000506
+food_period     equ 45
 
-arenaw      equ 45
-arenah      equ 45
-maxlen      equ 2025
-pixel_size  equ 4
-border      equ 4
-startlen    equ 3
+arenaw          equ 45
+arenah          equ 45
+maxlen          equ 2025
+pixel_size      equ 4
+border          equ 4
+startlen        equ 3
 
-food_color  equ 0x9
-bord_color  equ 0xF
-snake_color equ 0x4
-
-
+food_color      equ 0x9
+bord_color      equ 0xF
+snake_color     equ 0x4
 
 start:
+    mov sp, stack_addr
+
     ; set mode 
     mov ax, 0x0013
     int 0x10
 
     ; todo fill zeros
-    mov word [head], startlen
-    mov word [tail], 1
+    mov word [head_addr], startlen
+    mov word [tail_addr], 1
     mov byte [dir_addr], -1
     mov cx, 0
     mov dx, 0
-    mov byte [foodctr], 1
+    mov byte [food_cntr_addr], 1
    
     call draw_border
     jmp repeat
 
-
+; cx = x, dx = y on the field
+; al = color
 draw_pixel:
     push cx
     push dx
@@ -85,6 +88,8 @@ draw_pixel:
     pop cx
     ret
 
+; cx = x, dx = y on the field
+; color of a pixel returned in al
 get_pixel:
     push cx
     push dx
@@ -162,7 +167,6 @@ draw_border:
     cmp dx, bp
     jl .draw1
 
-
     dec dx
     lea bp, [arenaw * pixel_size + border]
 .draw2:
@@ -189,63 +193,7 @@ draw_border:
     pop cx
     ret
 
-
-next_color:
-    inc al
-    cmp al, 0x10
-    jl .ret
-    mov al, 1
-.ret:
-    ret
-
 move:
-    push cx
-    push dx
-
-    mov bp, word [head]
-    inc bp
-    cmp bp, maxlen
-    jl .skip
-    sub bp, maxlen
-.skip:
-    mov word [head], bp
-    mov byte [bp + bodyx], cl
-    mov byte [bp + bodyy], dl
-    call get_pixel
-    cmp al, snake_color
-    je start
-    cmp al, food_color
-    je .plus_len
-    mov al, snake_color
-    call draw_pixel
-
-    mov bp, word [tail]
-    mov cl, byte [bp + bodyx]
-    mov dl, byte [bp + bodyy]
-    mov al, 0x00
-    call draw_pixel
-
-    inc bp
-    cmp bp, maxlen
-    jl .skip2
-    sub bp, maxlen
-.skip2:
-    mov word [tail], bp
-    jmp .ret
-
-.plus_len:
-    mov al, snake_color
-    call draw_pixel
-.ret:
-    pop dx
-    pop cx
-    ret
-
-
-
-repeat:
-    call handle_press
-    
     mov ah, byte [dir_addr]
 
     cmp ah, dir_up
@@ -260,35 +208,77 @@ repeat:
     cmp ah, dir_right
     je .right
 
-    jmp repeat
+    ret
 .up:
     dec dl
-    jge .move
+    jge .redraw
     add dl, arenah 
-    jmp .move
+    jmp .redraw
 .down:
     inc dl
     cmp dl, arenah
-    jl .move
+    jl .redraw
     sub dl, arenah
-    jmp .move
+    jmp .redraw
 .left:
     dec cl
-    jge .move
+    jge .redraw
     add cl, arenaw
-    jmp .move
+    jmp .redraw
 .right:
     inc cl
     cmp cl, arenaw
-    jl .move
+    jl .redraw
     sub cl, arenaw   
 
-.move:
+.redraw:
+    push cx
+    push dx
+
+    mov bp, word [head_addr]
+    inc bp
+    cmp bp, maxlen
+    jl .skip
+    sub bp, maxlen
+.skip:
+    mov word [head_addr], bp
+    mov byte [bp + bodyx_addr], cl
+    mov byte [bp + bodyy_addr], dl
+    call get_pixel
+    cmp al, snake_color
+    je start
+    cmp al, food_color
+    je .plus_len
+    mov al, snake_color
+    call draw_pixel
+
+    mov bp, word [tail_addr]
+    mov cl, byte [bp + bodyx_addr]
+    mov dl, byte [bp + bodyy_addr]
+    mov al, 0x00
+    call draw_pixel
+
+    inc bp
+    cmp bp, maxlen
+    jl .skip2
+    sub bp, maxlen
+.skip2:
+    mov word [tail_addr], bp
+    jmp .ret
+
+.plus_len:
+    mov al, snake_color
+    call draw_pixel
+.ret:
+    pop dx
+    pop cx
+    ret
+
+repeat:
+    call handle_press
     call move
-
     call wait_
-
-    call food
+    call make_food
     jmp repeat
 
 wait_:
@@ -302,13 +292,16 @@ wait_:
     pop cx
     ret
 
-food:
+make_food:
     push cx
     push dx
 
-    dec byte [foodctr]
+    dec byte [food_cntr_addr]
     jnz .ret
-    mov byte [foodctr], foodper
+    mov byte [food_cntr_addr], food_period
+
+    mov ax, [clock_addr]
+    mov dx, 0
 
     mov ebp, arenaw
     div ebp
